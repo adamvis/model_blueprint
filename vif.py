@@ -5,23 +5,32 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.datasets import fetch_california_housing
 
 class VIFEliminator(BaseEstimator, TransformerMixin):
-    def __init__(self, threshold=10.0, priority_order=None, report=False, analysis_only=False):
+    def __init__(self, threshold=10.0, priority_order=None, report=False, analysis_only=False, categorical_features=None):
         self.threshold = threshold
         self.priority_order = priority_order
         self.report = report
         self.analysis_only = analysis_only
+        self.categorical_features = categorical_features
         self.features_to_keep_ = []
         self.elimination_report_ = []
 
     def fit(self, X, y=None):
         X = pd.DataFrame(X)
+        if self.categorical_features:
+            X = pd.get_dummies(X, columns=self.categorical_features, drop_first=True)
+        
         self.features_to_keep_, self.elimination_report_ = self._eliminate_vif(X)
         return self
 
     def transform(self, X):
         if self.analysis_only:
             return X
-        return X[:, self.features_to_keep_]
+        
+        X = pd.DataFrame(X)
+        if self.categorical_features:
+            X = pd.get_dummies(X, columns=self.categorical_features, drop_first=True)
+        
+        return X.iloc[:, self.features_to_keep_].values
 
     def _eliminate_vif(self, X):
         dropped = True
@@ -66,16 +75,19 @@ if __name__ == "__main__":
     housing = fetch_california_housing()
     X, y = housing.data, housing.target
     X = pd.DataFrame(X, columns=housing.feature_names)
-
+    
+    # Example: Add a categorical feature for demonstration
+    X['Region'] = np.random.choice(['North', 'South', 'East', 'West'], size=X.shape[0])
+    
     # Define a priority order (optional)
     priority_order = ['MedInc', 'HouseAge', 'AveRooms', 'AveBedrms', 'Population', 'AveOccup', 'Latitude', 'Longitude']
 
     # Initialize and fit the transformer with reporting enabled and analysis_only mode
-    vif_eliminator = VIFEliminator(threshold=10.0, priority_order=priority_order, report=True, analysis_only=False)
+    vif_eliminator = VIFEliminator(threshold=10.0, priority_order=priority_order, report=True, analysis_only=False, categorical_features=['Region'])
     vif_eliminator.fit(X)
 
     # Transform the data (only if not in analysis_only mode)
-    X_transformed = vif_eliminator.transform(X.values)
+    X_transformed = vif_eliminator.transform(X)
 
     # Print the resulting features
     print("Selected features:", X.columns[vif_eliminator.features_to_keep_])
